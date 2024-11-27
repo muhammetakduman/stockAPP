@@ -11,10 +11,11 @@ function App() {
   };
 
   return (
-    <Container>
-      <Typography variant="h4" align="center" gutterBottom>Stok Yönetim Sistemi</Typography>
-      <ProductForm onProductAdded={handleProductAdded} />
-      <ProductList key={refresh} />
+    <Container sx={{ marginTop: '50px', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+      <div><Typography variant="h4" align="center" gutterBottom>Stok Yönetim Sistemi</Typography>
+        <ProductForm onProductAdded={handleProductAdded} /></div>
+      <div><ProductList key={refresh} /></div>
+
     </Container>
   );
 }

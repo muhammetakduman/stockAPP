@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
-from .models import Product
+from .models import Product , Teklif
 from . import db
+import logging
+logging.basicConfig(level=logging.DEBUG)
 
 main = Blueprint('main', __name__)
 
@@ -51,3 +53,108 @@ def add_product():
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
+    
+@main.route('/api/products/<int:id>', methods=['PUT'])
+def update_product_stock(id):
+    data = request.get_json()
+    new_stock = data.get('stock')
+
+    try:
+        product = Product.query.get(id)
+        if not product:
+            return jsonify({"error": "Ürün bulunamadı"}), 404
+
+        # Stok miktarını güncelleme
+        product.stock = new_stock
+        product.price = product.unit_price * new_stock
+        db.session.commit()
+        return jsonify({"message": "Stok başarıyla güncellendi"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+# Ürün silme endpoint'i (DELETE)
+@main.route('/api/products/<int:id>', methods=['DELETE'])
+def delete_product(id):
+    try:
+        product = Product.query.get(id)
+        if not product:
+            return jsonify({"error": "Ürün bulunamadı"}), 404
+
+        db.session.delete(product)
+        db.session.commit()
+        return jsonify({"message": "Ürün başarıyla silindi"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+    
+@main.route('/api/teklif/stoktan', methods=['POST'])
+def teklif_stoktan_ekle():
+    data = request.get_json()
+    urun_id = data.get('urun_id')
+    miktar = int(data.get('miktar', 0))
+
+    # Stoktaki ürünü kontrol et
+    stok_urun = Product.query.get(urun_id)
+    if not stok_urun:
+        return jsonify({"error": "Stokta böyle bir ürün bulunamadı"}), 404
+
+    # Yeterli stok kontrolü
+    if stok_urun.stock < miktar:
+        return jsonify({"error": "Yeterli stok yok"}), 400
+
+    # Stok güncelleme ve toplam fiyat hesaplama
+    stok_urun.stock -= miktar
+    toplam_fiyat = stok_urun.unit_price * miktar
+
+    # Teklif oluşturma
+    teklif = Teklif(
+        urun_id=urun_id,
+        birim_fiyat=stok_urun.unit_price,
+        miktar=miktar,
+        toplam_fiyat=toplam_fiyat,
+        aciklama=data.get('aciklama')
+    )
+    db.session.add(teklif)
+    db.session.commit()
+    return jsonify({"message": "Stoktan teklif başarıyla eklendi!"}), 201
+
+@main.route('/api/teklif/manuel', methods=['POST'])
+def teklif_manuel_ekle():
+    data = request.get_json()
+    urun_adi = data.get('urun_adi')
+    birim_fiyat = float(data.get('birim_fiyat'))
+    miktar = int(data.get('miktar', 0))
+    toplam_fiyat = birim_fiyat * miktar
+
+    # Teklif oluşturma
+    teklif = Teklif(
+        urun_adi=urun_adi,
+        birim_fiyat=birim_fiyat,
+        miktar=miktar,
+        toplam_fiyat=toplam_fiyat,
+        aciklama=data.get('aciklama')
+    )
+    db.session.add(teklif)
+    db.session.commit()
+    return jsonify({"message": "Manuel teklif başarıyla eklendi!"}), 201
+
+@main.route('/api/teklifler', methods=['GET'])
+def get_teklifler():
+    teklifler = Teklif.query.all()
+    output = [
+        {
+            "id": teklif.id,
+            "musteri_id": teklif.musteri_id,
+            "urun_id": teklif.urun_id,
+            "urun_adi": teklif.urun_adi,
+            "birim_fiyat": teklif.birim_fiyat,
+            "miktar": teklif.miktar,
+            "toplam_fiyat": teklif.toplam_fiyat,
+            "tarih": teklif.tarih,
+            "aciklama": teklif.aciklama,
+            "durum": teklif.durum
+        }
+        for teklif in teklifler
+    ]
+    return jsonify({"teklifler": output})
